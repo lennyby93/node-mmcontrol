@@ -6,7 +6,6 @@
 var restify = require('restify');
 var fs = require('fs');
 var async = require('async');
-var bunyan = require('bunyan');
 
 //static definitions
 var fileNames = {
