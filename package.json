@@ -11,8 +11,8 @@
     "url": "git+https://github.com/lennyby93/node-mmcontrol.git"
   },
   "dependencies": {
-    "restify": "~4.0.0",
-    "async": "~1.5.0"
+    "restify": "^4.0.0",
+    "async": "^1.5.0"
   },
   "keywords": [
     "mitsubishi",
