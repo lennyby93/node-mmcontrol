@@ -14,7 +14,7 @@ var fileNames = {
     };
 
 var dirNames = {
-        'models': './models/'
+        'models': '../models/'
     };
 
 var commands = {
@@ -336,7 +336,7 @@ MMcontrol.prototype.loadModel = function (unitid, callback) {
 
     var model = self._capabilities[unitid].modeltype;
 
-    self.loadJSONFile(dirNames.models + '/' + fileNames.model + model + '.json', function (err, modelData) {
+    self.loadJSONFile(__dirname + '/' + dirNames.models + '/' + fileNames.model + model + '.json', function (err, modelData) {
         if (err) {
             return callback(err);
         }
