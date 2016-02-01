@@ -9,15 +9,147 @@ var async = require('async');
 
 //static definitions
 var fileNames = {
-        'state': 'state.txt',
-        'model': 'type-' //model id and .json get appended in the method
+        'state': 'state.txt'
     };
 
-var dirNames = {
-        'models': '../models/'
-    };
+//commands used to control the heat pump
+//all capabilties are listed here, they get enabled if the capabitlies of the
+//unit allow for particular command
+var capabilitiesMap = {
+    "prefix": {
+        "mode": "MD",
+        "fan": "FS",
+        "power": "PW",
+        "temperature": "TS",
+        "airDirH": "AH", //hasirdirh
+        "airDirV": "AV"  //hasairdir
+    },
+    "mode": {
+        "heat": "1",
+        "dry": "2", //hasdrymode
+        "cool": "3",
+        "fan": "7",
+        "auto": "8" //hasautomode
+    },
+    "power": {
+        "on": "1",
+        "off": "0"
+    },
+    "fan": {
+        "auto": "0", //hasautofan
+        "1": {
+            "1": "5"
+        },
+        "2": {
+            "1": "2",
+            "2": "5"
+        },
+        "3": {
+            "1": "2",
+            "2": "3",
+            "3": "5"
+        },
+        "4": {
+            "1": "2",
+            "2": "3",
+            "3": "5",
+            "4": "6"
+        },
+        "5": {
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "5",
+            "5": "6"
+        }
+    },
+    "airDirH": {
+        "auto": "0",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "swing": "12"
+    },
+    "airDirV": {
+        "auto": "0", //hasairauto
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "swing": "7" //hasswing
+    }
+};
 
-var commands = {
+//filters used to check if functionality is present
+var capabilitiesMapFilter = {
+    "prefix": {
+        "airDirH": {
+            "capability" : "hasairdirh",
+            "value": "1"
+        },
+        "airDirV": {
+            "capability" : "hasairdir",
+            "value": "1"
+        }
+    },
+    "mode": {
+        "dry": {
+            "capability" : "hasdrymode",
+            "value": "1"
+        },
+        "auto": {
+            "capability": "hasautomode",
+            "value": "1"
+        }
+    },
+    "fan": {
+        "auto": {
+            "capability" : "hasautofan",
+            "value": "1"
+        },
+        "1": {
+            "capability" : "fanstage",
+            "value": "1",
+            "copySubsection": true
+        },
+        "2": {
+            "capability" : "fanstage",
+            "value": "2",
+            "copySubsection": true
+        },
+        "3": {
+            "capability" : "fanstage",
+            "value": "3",
+            "copySubsection": true
+        },
+        "4": {
+            "capability" : "fanstage",
+            "value": "4",
+            "copySubsection": true
+        },
+        "5": {
+            "capability" : "fanstage",
+            "value": "5",
+            "copySubsection": true
+        }
+    },
+    "airDirV": {
+        "auto": {
+            "capability" : "hasairauto",
+            "value": "1"
+        },
+        "swing": {
+            "capability" : "hasswing",
+            "value": "1"
+        }
+    }
+};
+
+//REST call points
+var APICommands = {
         'login': {
             url: 'api/login.aspx'
         },
@@ -29,8 +161,9 @@ var commands = {
         }
     };
 
-var appVersion = '3.0.503';
+var appVersion = '3.0.513';
 
+//only these capabilties are stored in the session file
 var knownCapabilities = [
     'id',
     'unitname',
@@ -322,29 +455,60 @@ MMcontrol.prototype.loadState = function (callback) {
 
 };
 
+
 /**
- * @function (private) loads model data from file, this data is used to normalise API responses
+ * @function (private) analysis the capabilities of the unit and copies correct properites from the capabilitiesMap into modelData
  * @param   {number}   unitid   sequencial number of the unit to query
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
  */
-MMcontrol.prototype.loadModel = function (unitid, callback) {
+MMcontrol.prototype.setCapabilties = function (unitid, callback) {
 
     var self = this;
 
-    self.log("loadModel unitid: " + unitid);
+    self.log("setCapabilties unitid: " + unitid);
 
-    var model = self._capabilities[unitid].modeltype;
+    //loop through the capabilties and add those that matter to the unit definition
+    var section, capability;
+    var i;
 
-    self.loadJSONFile(__dirname + '/' + dirNames.models + '/' + fileNames.model + model + '.json', function (err, modelData) {
-        if (err) {
-            return callback(err);
+    self._capabilities[unitid].modelData = {};
+    for (section in capabilitiesMap) {
+        if (capabilitiesMap.hasOwnProperty(section)) {
+            self._capabilities[unitid].modelData[section] = {};
+            for (capability in capabilitiesMap[section]) {
+                if (capabilitiesMap[section].hasOwnProperty(capability)) {
+                    if (capabilitiesMapFilter[section] !== undefined && capabilitiesMapFilter[section][capability] !== undefined) {
+                        //check if the capability is present and has the correct value
+                        if (self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability] !== undefined) {
+                            if (self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability].toString() === capabilitiesMapFilter[section][capability].value.toString()) {
+                                //check whether to copy the whole subsection structure or just the subsection value
+                                if (capabilitiesMapFilter[section][capability].copySubsection !== undefined) {
+                                    self._capabilities[unitid].modelData[section][capability] = {};
+                                    //subtree to copy
+                                    self.log("copying for value: " + self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]);
+                                    self.log("tree:" + JSON.stringify(capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]]));
+                                    for (i in capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]]) {
+                                        if (capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]].hasOwnProperty(i)) {
+                                            self._capabilities[unitid].modelData[section][i] = capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]][i];
+                                        }
+                                    }
+                                } else {
+                                    //single capability
+                                    self._capabilities[unitid].modelData[section][capability] = capabilitiesMap[section][capability];
+                                }
+                            }
+                        }
+                    } else {
+                        //no filter - copy the capability
+                        self._capabilities[unitid].modelData[section][capability] = capabilitiesMap[section][capability];
+                    }
+                }
+            }
         }
-
-        self._capabilities[unitid].modelData = modelData;
-        return callback();
-    });
-
+    }
+    self.log("capabilities:" + JSON.stringify(self._capabilities[unitid].modelData));
+    return callback();
 };
 
 /**
@@ -361,10 +525,10 @@ MMcontrol.prototype.callAPI = function (action, params, callback) {
 
     self.log("callAPI - " + action);
 
-    if (commands.hasOwnProperty(action)) {
+    if (APICommands.hasOwnProperty(action)) {
 
         var options =  {
-            path: self._config.url + '/' + commands[action].url,
+            path: self._config.url + '/' + APICommands[action].url,
             userAgent: self._config.url,
             headers: {}
         };
@@ -536,7 +700,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
             async.each(self._capabilities,
                 function (id, callback) {
                     self.log("getting model data for " + id.unitid);
-                    self.loadModel(id.unitid, function (err) {
+                    self.setCapabilties(id.unitid, function (err) {
                         if (err) {
                             return callback(err);
                         }
