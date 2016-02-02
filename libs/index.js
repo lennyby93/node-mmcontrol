@@ -3,7 +3,7 @@
 "use strict";
 
 
-var restify = require('restify');
+var restify = require('restify-clients');
 var fs = require('fs');
 var async = require('async');
 
