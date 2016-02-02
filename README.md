@@ -76,7 +76,7 @@ controller.setMode(0, 'cool', function (err) {
 
 #### MMcontrol(params)
 Constructor, sets initial values
- * params object that contains parameters used to initalise the object:
+ * params object that contains parameters used to initialise the object:
  
 | parameter | type |definition |   | default value |
 | ----------|----|-------------------|---|---------------|
