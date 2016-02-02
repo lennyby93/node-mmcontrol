@@ -190,8 +190,8 @@ var knownCapabilities = [
      *                        userAgent - the userAgent the requests should use (default: restify default)
      *                        log - bunyan log object, MMcontrol will log using a child of (module=MMcontrol)
      *                        minRefresh - the amount of time (in seconds) MMcontrol will wait before querying the API again to refreash the state of the heat pump(other requests are send immiedietaly)
-     *                        tmpDir - directory used to store temporary files (cookies, capabilites and state if persistance is enabled)
-     *                        persistance - if MMcontrol should store cookies, capabilities of the heat pump(s) and the state(s) in a file for re-use after process terminates
+     *                        tmpDir - directory used to store temporary files (cookies, capabilites and state if persistence is enabled)
+     *                        persistence - if MMcontrol should store cookies, capabilities of the heat pump(s) and the state(s) in a file for re-use after process terminates
  */
 function MMcontrol(params) {
 
@@ -223,7 +223,7 @@ function MMcontrol(params) {
             'required': false,
             'default': '/tmp'
         },
-        'persistance': {
+        'persistence': {
             'required': false,
             'default': true
         }
@@ -360,7 +360,7 @@ MMcontrol.prototype.getValue = function (unitid, section, value) {
 };
 
 /**
- * @function (private) stores current state (cookies, heat pumps capabilties and states) into a file, if persistance is set
+ * @function (private) stores current state (cookies, heat pumps capabilties and states) into a file, if persistence is set
  * @param   {function} callback called with results 
  * @returns {object}   - error (if error was encountered)
  */
@@ -370,7 +370,7 @@ MMcontrol.prototype.storeState = function (callback) {
 
     self.log("storeState");
 
-    if (self._config.persistance) {
+    if (self._config.persistence) {
 
         var state = {
             'session': self._session,
@@ -739,7 +739,7 @@ MMcontrol.prototype.connect = function (reuse, callback) {
 
     self.log("connect");
 
-    if (self._config.persistance && reuse) {
+    if (self._config.persistence && reuse) {
         self.loadState(function (err) {
             if (err) {
                 //couldn't load the state details - ignore and build new ones
