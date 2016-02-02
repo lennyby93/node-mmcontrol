@@ -6,8 +6,9 @@ MMcontrol provides the following features:
 * setting the power state 
 * setting the operation mode (cool, heat, dry, fan, auto)
 * setting speed of the fans
-* setting target temperature
-* reading current state of the unit (power mode, standby mode, operation mode, fan speed, room temperature and target temperature )
+* setting the target temperature
+* setting the airflow direction (horizontal and vertical)
+* reading current state of the unit (power mode, standby mode, operation mode, fan speed, room temperature and target temperature)
 * supports multiple units under a single account
 * session persistence between subsequent calls
 * integrates with bunyan logger
@@ -39,8 +40,9 @@ controller.connect(true, function (err) {
     } else {
         console.log("connection established");
     });
-
+```
 ### Query current state of unit 0
+```javascript
 controller.getCurrentState(0, function (err, state) {
     if (err) {
         console.log("couldn't get the current state: " + err);
@@ -113,7 +115,7 @@ Returns an *object* with the current state of the heat pump unit
 | setTemperature | *float* | currently set target temperature |
 | roomTemperature | *float* | currently reported room temperature |
 
-If the power is 'off' the reported values are the last active ones from before the unit was switched off. Current roomTemperature is always reported (even when the unit is off), the reported temperature is always rounded to the nearest *integer*.
+If the power is 'off' the reported values are the last active ones from before the unit was switched off. Current roomTemperature is always reported (even when the unit is off), the reported temperature is always rounded to the nearest *integer* (this is a limitation of the API).
 
 #### getCurrentStateRaw (unitid, callback)
 Returns an *object* with the current state of the heat pump unit as returned by the API (without being normalised with values from the model file)
@@ -141,44 +143,46 @@ Sets the mode of operation ('cool', 'heat', 'dry', 'fan', 'auto'). Adjusts targe
 #### setFanSpeed(unitid, fanSpeed, callback)
 Sets the speed of the fan.
 * unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
-* fanSpeed (*string*) - speed to set (as defined in the model file)
+* fanSpeed (*string*) - speed to set (1-5, auto)
 * callback (*function* (error)) - called on completion, if there ws a problem 'error' contains a *string*, *null* otherwise
 
-## Model definitions
+#### setAirDirH(unitid, dir, callback)
+Sets the horizontal direction of the airflow
+* unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
+* dir (*string*) - direction (0-5, auto, swing)
+* callback (*function* (error)) - called on completion, if there ws a problem 'error' contains a *string*, *null* otherwise
 
-The commands and values used to control a heat pump unit are defined in model file. The file contains the mappings between then internal and human-readable values. A file for type-3 looks like this:
-```JSON
-{
-    "prefix": {
-        "mode": "MD",
-        "fan": "FS",
-        "power": "PW",
-        "temperature": "TS"
-    },
-    "mode": {
-        "heat": "1",        
-        "dry": "2",        
-        "cool": "3",
-        "fan": "7",
-        "auto": "8"
-    },
-    "power": {
-        "on": "1",
-        "off": "0"
-    },
-    "fan": {
-        "1": "2",
-        "2": "3",
-        "3": "5"
-    }
-}
-```
-* prefix - states the prefix that should be used for the various 'set' commands
-* mode - defines the modes heat pump unit understands
-* power - defines the power stats for the heat pump
-* fan - defines the fan speeds
+#### setAirDirV(unitid, dir, callback)
+Sets the vertical direction of the airflow
+* unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
+* dir (*string*) - direction (0-5, auto, swing)
+* callback (*function* (error)) - called on completion, if there ws a problem 'error' contains a *string*, *null* otherwise
 
-## Limitations
+## Capabilities
+MMcontrol detects the capabilities of the heat pump and limits the commands to what the unit reports as enabled.
+
+The following functions are always enabled:
+* mode:
+ - heat
+ - cool
+ - fan
+* setting temperature
+* turning power on/off
+* setting fan speed
+ - limited to the speeds reported by the unit
+
+The following functions are only enabled if the unit reports back the capability
+* mode:
+ - auto
+ - dry
+* setting fan speed to auto
+* chaning vertical direction of the airflow
+ - directions 1-5 are enabled by default
+ - auto and swing - if enabled by the unit
+* changing horizontal direction of the airflow
+ - directions 1-5, swing and auto are enabled by default
+ 
+ ## Limitations
 
 So far the module has been tested only with the following heat pumps:
 * ducted (PEAD-RPxx)

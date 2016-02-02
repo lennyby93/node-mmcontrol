@@ -21,41 +21,41 @@ var capabilitiesMap = {
         "fan": "FS",
         "power": "PW",
         "temperature": "TS",
-        "airDirH": "AH", //hasirdirh
+        "airDirH": "AH", //hasairdirh
         "airDirV": "AV"  //hasairdir
     },
     "mode": {
         "heat": "1",
-        "dry": "2", //hasdrymode
+        "dry": "2",     //hasdrymode
         "cool": "3",
         "fan": "7",
-        "auto": "8" //hasautomode
+        "auto": "8"     //hasautomode
     },
     "power": {
         "on": "1",
         "off": "0"
     },
     "fan": {
-        "auto": "0", //hasautofan
-        "1": {
+        "auto": "0",    //hasautofan
+        "1": {          //fanstage: 1
             "1": "5"
         },
-        "2": {
+        "2": {          //fanstage: 2
             "1": "2",
             "2": "5"
         },
-        "3": {
+        "3": {          //fanstage: 3
             "1": "2",
             "2": "3",
             "3": "5"
         },
-        "4": {
+        "4": {          //fanstage: 4
             "1": "2",
             "2": "3",
             "3": "5",
             "4": "6"
         },
-        "5": {
+        "5": {          //fanstage: 5
             "1": "1",
             "2": "2",
             "3": "3",
@@ -1003,12 +1003,7 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
 
     self.log("setMode (u:" + unitid + ") to " + mode);
 
-    //make sure the unit has 'auto' mode 
-    if (mode === 'auto') {
-        if (self._capabilities[unitid].hasautomode === undefined || self._capabilities[unitid].hasautomode !== 1) {
-            return callback("unit doesn't have auto mode");
-        }
-    }
+    //make sure the unit has the requested mode
     if (self._capabilities[unitid].modelData.prefix.mode !== undefined) {
         if (self._capabilities[unitid].modelData.mode[mode] !== undefined) {
             //check if the current temperature is within the range for the new mode and adjust accoridingly
@@ -1061,6 +1056,9 @@ MMcontrol.prototype.setFanSpeed = function (unitid, fanSpeed, callback) {
     var self = this;
 
     self.log("setFanSpeed (u:" + unitid + ") to " + fanSpeed);
+
+    fanSpeed = fanSpeed.toString();
+
     if (self._capabilities[unitid].modelData.prefix.fan !== undefined) {
         if (self._capabilities[unitid].modelData.fan[fanSpeed] !== undefined) {
             self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.fan + self._capabilities[unitid].modelData.fan[fanSpeed], function (err) {
@@ -1073,7 +1071,69 @@ MMcontrol.prototype.setFanSpeed = function (unitid, fanSpeed, callback) {
             return callback("unit doesn't support fan speed: " + fanSpeed);
         }
     } else {
-        return callback("model file doesn't have a prefix for fan speed commands");
+        return callback("unit doesn't support changing the fan speed");
+    }
+};
+
+/**
+ * @function sets the vertical air direction
+ * @param   {number}   unitid   sequencial number of the unit to send the command to
+ * @param   {string}   dir requested direction
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ */
+MMcontrol.prototype.setAirDirV = function (unitid, dir, callback) {
+
+    var self = this;
+
+    self.log("setAirDirV (u:" + unitid + ") to " + dir);
+
+    dir = dir.toString();
+
+    if (self._capabilities[unitid].modelData.prefix.airDirV !== undefined) {
+        if (self._capabilities[unitid].modelData.airDirV[dir] !== undefined) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.airDirV + self._capabilities[unitid].modelData.airDirV[dir], function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                return callback();
+            });
+        } else {
+            return callback("unit doesn't support vertical air direction: " + dir);
+        }
+    } else {
+        return callback("unit doesn't support changing the vertical air direction");
+    }
+};
+
+/**
+ * @function sets the horizontal air direction
+ * @param   {number}   unitid   sequencial number of the unit to send the command to
+ * @param   {string}   dir requested direction
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ */
+MMcontrol.prototype.setAirDirH = function (unitid, dir, callback) {
+
+    var self = this;
+
+    self.log("setAirDirH (u:" + unitid + ") to " + dir);
+
+    dir = dir.toString();
+
+    if (self._capabilities[unitid].modelData.prefix.airDirH !== undefined) {
+        if (self._capabilities[unitid].modelData.airDirH[dir] !== undefined) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.airDirH + self._capabilities[unitid].modelData.airDirH[dir], function (err) {
+                if (err) {
+                    return callback(err);
+                }
+                return callback();
+            });
+        } else {
+            return callback("unit doesn't support horizontal air direction: " + dir);
+        }
+    } else {
+        return callback("unit doesn't support changing the horizonal air direction");
     }
 };
 
