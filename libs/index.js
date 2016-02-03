@@ -505,7 +505,6 @@ MMcontrol.prototype.setCapabilties = function (unitid, callback) {
             }
         }
     }
-    self.log("capabilities:" + JSON.stringify(self._capabilities[unitid].modelData));
     return callback();
 };
 
