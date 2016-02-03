@@ -486,8 +486,6 @@ MMcontrol.prototype.setCapabilties = function (unitid, callback) {
                                 if (capabilitiesMapFilter[section][capability].copySubsection !== undefined) {
                                     self._capabilities[unitid].modelData[section][capability] = {};
                                     //subtree to copy
-                                    self.log("copying for value: " + self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]);
-                                    self.log("tree:" + JSON.stringify(capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]]));
                                     for (i in capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]]) {
                                         if (capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]].hasOwnProperty(i)) {
                                             self._capabilities[unitid].modelData[section][i] = capabilitiesMap[section][self._capabilities[unitid][capabilitiesMapFilter[section][capability].capability]][i];
