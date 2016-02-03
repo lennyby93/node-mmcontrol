@@ -1,6 +1,6 @@
 {
   "name": "mmcontrol",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "mmcontrol provides an easy way to control Mitsubishi heat pumps that use the MAC-558 WiFi adaptor.",
   "main": "libs/index.js",
   "scripts": {
