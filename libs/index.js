@@ -819,7 +819,7 @@ MMcontrol.prototype.getUnitList = function (callback) {
  *                       - airDirH - allowed horizontal direction settings
  *                       - airDirV - allowed vertial direction settings
  */
-MMcontrol.prototype.geCapabilities = function (unitid, callback) {
+MMcontrol.prototype.getCapabilities = function (unitid, callback) {
 
     var self = this;
 
