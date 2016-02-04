@@ -16,7 +16,7 @@ var fileNames = {
 //all capabilties are listed here, they get enabled if the capabitlies of the
 //unit allow for particular command
 var capabilitiesMap = {
-    "prefix": {
+    "action": {
         "mode": "MD",
         "fan": "FS",
         "power": "PW",
@@ -64,28 +64,32 @@ var capabilitiesMap = {
         }
     },
     "airDirH": {
-        "auto": "0",
-        "1": "1",
-        "2": "2",
-        "3": "3",
-        "4": "4",
-        "5": "5",
-        "swing": "12"
+        "1": {          //hasairdirh
+            "auto": "0",
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5",
+            "swing": "12"
+        }
     },
     "airDirV": {
-        "auto": "0", //hasairauto
-        "1": "1",
-        "2": "2",
-        "3": "3",
-        "4": "4",
-        "5": "5",
-        "swing": "7" //hasswing
+        "auto": "0",    //hasairauto
+        "1": {          //hasairdir
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5"
+        },
+        "swing": "7"    //hasswing
     }
 };
 
 //filters used to check if functionality is present
 var capabilitiesMapFilter = {
-    "prefix": {
+    "action": {
         "airDirH": {
             "capability" : "hasairdirh",
             "value": "1"
@@ -144,6 +148,18 @@ var capabilitiesMapFilter = {
         "swing": {
             "capability" : "hasswing",
             "value": "1"
+        },
+        "1": {
+            "capability" : "hasairdir",
+            "value": "1",
+            "copySubsection": true
+        }
+    },
+    "airDirH": {
+        "1": {
+            "capability" : "hasairdirh",
+            "value": "1",
+            "copySubsection": true
         }
     }
 };
@@ -462,11 +478,11 @@ MMcontrol.prototype.loadState = function (callback) {
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
  */
-MMcontrol.prototype.setCapabilties = function (unitid, callback) {
+MMcontrol.prototype.parseCapabilities = function (unitid, callback) {
 
     var self = this;
 
-    self.log("setCapabilties unitid: " + unitid);
+    self.log("parseCapabilities unitid: " + unitid);
 
     //loop through the capabilties and add those that matter to the unit definition
     var section, capability;
@@ -579,24 +595,23 @@ MMcontrol.prototype.login = function (callback) {
             return callback("wrong username/password or no heat pumps defined in the app");
         }
         return callback(null, response.userunits);
-        //initialise capabilites and state arrays
 
     });
 };
 
 
 /**
- * @function (private) gets Capabilties of a unit
+ * @function (private) gets Capabilties of a unit using the API
  * @param   {number}   unitid   sequencial number of the unit to query (derived from userunits returned by login)
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encoutnred)
  *                     - object with capabilities (raw format)
  */
-MMcontrol.prototype.getUnitCapabilities = function (unitid, callback) {
+MMcontrol.prototype.callUnitCapabilities = function (unitid, callback) {
 
     var self = this;
 
-    self.log("getCapabilites unitid:" + unitid);
+    self.log("callUnitCapabilites unitid:" + unitid);
 
     self.callAPI('unitcapabilities', {unitid: unitid}, function (err, unitCapabilities) {
         if (err) {
@@ -613,11 +628,11 @@ MMcontrol.prototype.getUnitCapabilities = function (unitid, callback) {
  * @returns {object}   - error (if one was encountered)
  *                     - object with state of the unit (raw format)
  */
-MMcontrol.prototype.getUnitState = function (unitid, callback) {
+MMcontrol.prototype.callUnitState = function (unitid, callback) {
 
     var self = this;
 
-    self.log("getUnitState unitid:" + unitid);
+    self.log("callUnitState unitid:" + unitid);
 
     self.callAPI('unitcommand', {unitid: self._capabilities[unitid].id, v: 2}, function (err, unitState) {
         if (err) {
@@ -654,7 +669,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
             async.each(self._capabilities,
                 function (id, callback) {
                     self.log("getting capabilties for: " + id.unitid);
-                    self.getUnitCapabilities(id.unitid, function (err, unitCapabilties) {
+                    self.callUnitCapabilities(id.unitid, function (err, unitCapabilties) {
                         if (err) {
                             return callback(err);
                         }
@@ -678,7 +693,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
             async.each(self._capabilities,
                 function (id, callback) {
                     self.log("getting state for: " + id.unitid);
-                    self.getUnitState(id.unitid, function (err) {
+                    self.callUnitState(id.unitid, function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -697,7 +712,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
             async.each(self._capabilities,
                 function (id, callback) {
                     self.log("getting model data for " + id.unitid);
-                    self.setCapabilties(id.unitid, function (err) {
+                    self.parseCapabilities(id.unitid, function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -792,7 +807,41 @@ MMcontrol.prototype.getUnitList = function (callback) {
 };
 
 /**
- * @function returns the current state of the unit. Either queries remote API or returns cached data (depending if minRefresh expired on not)
+ * @function Returns an object with capabilities enabled for the unit
+ * @param   {number}   unitid   sequencial number of the unit to query
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ *                     - capabilties object:
+ *                       - action - allowed actions
+ *                       - mode - allowed modes
+ *                       - power - allowed power states
+ *                       - fan - allowed fan speeds
+ *                       - airDirH - allowed horizontal direction settings
+ *                       - airDirV - allowed vertial direction settings
+ */
+MMcontrol.prototype.geCapabilities = function (unitid, callback) {
+
+    var self = this;
+
+    self.log("getCapabilities");
+
+    var capabilities = {};
+    var i, j;
+    for (i in self._capabilities[unitid].modelData) {
+        if (self._capabilities[unitid].modelData.hasOwnProperty(i)) {
+            capabilities[i] = [];
+            for (j in self._capabilities[unitid].modelData[i]) {
+                if (self._capabilities[unitid].modelData[i].hasOwnProperty(j)) {
+                    capabilities[i].push(j);
+                }
+            }
+        }
+    }
+    return callback(null, capabilities);
+};
+
+/**
+ * @function returns the current state of the unit. Either queries remote API or returns cached data (depending if minRefresh has xpired or not)
  * @param   {number}   unitid   sequencial number of the unit to query
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
@@ -827,8 +876,7 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
         function (callback) {
             //check if we should refresh the data using API
             if (self._state[unitid].timestamp === undefined || ((new Date()).getTime() - self._state[unitid].timestamp) > self._config.minRefresh * 1000) {
-//                self.log(self._state[unitid].timestamp + ' ' + ((new Date()).getTime() - self._state[unitid].timestamp) + ' ' + (self._config.minRefresh * 1000));
-                self.getUnitState(unitid, function (err) {
+                self.callUnitState(unitid, function (err) {
                     if (err) {
                         return callback(err);
                     }
@@ -866,7 +914,7 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
 };
 
 /**
- * @function returns the current state of the unit as returned by the API. Either queries remote API or returns cached data (depending if minRefresh expired on not)
+ * @function returns the current state of the unit as returned by the API. Either queries remote API or returns cached data (depending if minRefresh has expired or not)
  * @param   {number}   unitid   sequencial number of the unit to query
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
@@ -879,7 +927,7 @@ MMcontrol.prototype.getCurrentStateRaw = function (unitid, callback) {
     self.log("getCurrentStateRaw (u:" + unitid + ")");
 
     if (self._state[unitid].timestamp === undefined || ((new Date()).getTime() - self._state[unitid].timestamp) > self._config.minRefresh * 1000) {
-        self.getUnitState(unitid, function (err) {
+        self.callUnitState(unitid, function (err) {
             if (err) {
                 return callback(err);
             }
@@ -932,9 +980,9 @@ MMcontrol.prototype.setPower = function (unitid, state, callback) {
     var self = this;
 
     self.log("setPower (u:" + unitid + ") to " + state);
-    if (self._capabilities[unitid].modelData.prefix.power !== undefined) {
+    if (self._capabilities[unitid].modelData.action.power !== undefined) {
         if (self._capabilities[unitid].modelData.power[state] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.power + self._capabilities[unitid].modelData.power[state], function (err) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.power + self._capabilities[unitid].modelData.power[state], function (err) {
                 if (err) {
                     return callback(err);
                 }
@@ -944,7 +992,7 @@ MMcontrol.prototype.setPower = function (unitid, state, callback) {
             return callback("uknown power state: " + state);
         }
     } else {
-        return callback("model file doesn't have a prefix for power commands");
+        return callback("model file doesn't have a action for power commands");
     }
 };
 
@@ -973,7 +1021,7 @@ MMcontrol.prototype.setTemperature = function (unitid, temperature, callback) {
                 temperature = self._capabilities[unitid].max[self._state[unitid].setmode].max;
             }
 
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.temperature + temperature, function (err) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.temperature + temperature, function (err) {
                 if (err) {
                     return callback(err);
                 }
@@ -1001,7 +1049,7 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
     self.log("setMode (u:" + unitid + ") to " + mode);
 
     //make sure the unit has the requested mode
-    if (self._capabilities[unitid].modelData.prefix.mode !== undefined) {
+    if (self._capabilities[unitid].modelData.action.mode !== undefined) {
         if (self._capabilities[unitid].modelData.mode[mode] !== undefined) {
             //check if the current temperature is within the range for the new mode and adjust accoridingly
             var temperature = self._state[unitid].settemp;
@@ -1018,7 +1066,7 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
                     if (err) {
                         return callback(err);
                     }
-                    self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
+                    self.sendCommand(unitid, self._capabilities[unitid].modelData.action.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -1026,7 +1074,7 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
                     });
                 });
             } else {
-                self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
                     if (err) {
                         return callback(err);
                     }
@@ -1037,7 +1085,7 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
             return callback("uknown mode: " + mode);
         }
     } else {
-        return callback("model file doesn't have a prefix for mode commands");
+        return callback("no action to change mode");
     }
 };
 
@@ -1056,9 +1104,9 @@ MMcontrol.prototype.setFanSpeed = function (unitid, fanSpeed, callback) {
 
     fanSpeed = fanSpeed.toString();
 
-    if (self._capabilities[unitid].modelData.prefix.fan !== undefined) {
+    if (self._capabilities[unitid].modelData.action.fan !== undefined) {
         if (self._capabilities[unitid].modelData.fan[fanSpeed] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.fan + self._capabilities[unitid].modelData.fan[fanSpeed], function (err) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.fan + self._capabilities[unitid].modelData.fan[fanSpeed], function (err) {
                 if (err) {
                     return callback(err);
                 }
@@ -1087,9 +1135,9 @@ MMcontrol.prototype.setAirDirV = function (unitid, dir, callback) {
 
     dir = dir.toString();
 
-    if (self._capabilities[unitid].modelData.prefix.airDirV !== undefined) {
+    if (self._capabilities[unitid].modelData.action.airDirV !== undefined) {
         if (self._capabilities[unitid].modelData.airDirV[dir] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.airDirV + self._capabilities[unitid].modelData.airDirV[dir], function (err) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airDirV + self._capabilities[unitid].modelData.airDirV[dir], function (err) {
                 if (err) {
                     return callback(err);
                 }
@@ -1118,9 +1166,9 @@ MMcontrol.prototype.setAirDirH = function (unitid, dir, callback) {
 
     dir = dir.toString();
 
-    if (self._capabilities[unitid].modelData.prefix.airDirH !== undefined) {
+    if (self._capabilities[unitid].modelData.action.airDirH !== undefined) {
         if (self._capabilities[unitid].modelData.airDirH[dir] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.prefix.airDirH + self._capabilities[unitid].modelData.airDirH[dir], function (err) {
+            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airDirH + self._capabilities[unitid].modelData.airDirH[dir], function (err) {
                 if (err) {
                     return callback(err);
                 }

@@ -41,6 +41,46 @@ controller.connect(true, function (err) {
         console.log("connection established");
     });
 ```
+### Query capabilities of unit 0
+```javascript
+controller.getCapabilities(0, function (err, capabilities) {
+    if (err) {
+        console.log("couldn't get the capabilities: " + err);
+    }
+    console.log(JSON.stringify(capabilities, null, 1));
+});
+```
+output:
+```JSON
+    {
+     "action": [
+      "mode",
+      "fan",
+      "power",
+      "temperature"
+     ],
+     "mode": [
+      "heat",
+      "dry",
+      "cool",
+      "fan",
+      "auto"
+     ],
+     "power": [
+      "on",
+      "off"
+     ],
+     "fan": [
+      "1",
+      "2",
+      "3"
+     ],
+     "airDirH": [],
+     "airDirV": [
+      "auto"
+     ]
+    }
+```
 ### Query current state of unit 0
 ```javascript
 controller.getCurrentState(0, function (err, state) {
@@ -68,7 +108,7 @@ controller.setMode(0, 'cool', function (err) {
     if (err) {
         console.log("couldn't set the mode: " + err)
     }
-    console.log("mode set")
+    console.log("mode set");
 });
 
 ```
@@ -97,8 +137,22 @@ Builds a connection with the API or loads details of the previous one from a fil
 * callback (*function* (error)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise
 
 #### getUnitList (callback)
-Returns an *array* with unit names. Index of the array can be used to identify the heat pump units in subsequent set/get calls
+Returns an *array* with unit names. Index of the array can be used to identify the heat pump units in subsequent set/get calls.
 * callback (*function* (error, unitList)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise, unitList contains an *array* of unit names
+
+#### getCapabilities (unitid, callback)
+Returns an *object* with capabilities of the unit, based on the information returned by the remote unit API.
+* unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
+* callback (*function* (error, capabilities)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise, capabilities contains the capabilities of the  unit:
+
+| parameter | type | definition |
+|---|---|---|
+| action | array | set of commands that the unit responds to |
+| mode | array | list of supported modes |
+| power | array | list of supported power states (always 'on' and 'off') |
+| fan | array | list of supported fan speeds |
+| airDirH | array | list of supported horizontal airflow directions |
+| airDirV | array | list of supported vertical airflow directions |
 
 #### getCurrentState (unitid, callback)
 Returns an *object* with the current state of the heat pump unit
@@ -182,14 +236,17 @@ The following functions are only enabled if the unit reports back the capability
 * changing horizontal direction of the airflow
  - directions 1-5, swing and auto are enabled by default
   
- ## Request optimisations
+## Request optimisations
 
 MMcontrol tries to limit the number of requests used to query the current state of the heat pump ('get' commands, i.e. not changing the state of the unit). By default, the state is cached for 60 seconds (this value can be changed by passing the *minRefresh* parameter to the constructor). Each set-type command is send immediately and also refreshes the current state of the unit. 
 
- ## Limitations
+## Limitations
 
 So far the module has been tested only with the following heat pumps:
 * ducted (PEAD-RPxx)
+
+## Troubleshooting 
+If for some reason the module refuses to work correctly please remove the state file (usually /tmp/state.txt) or *connect* with the reuse option set to *false*.
 
 ## Disclaimer
 
