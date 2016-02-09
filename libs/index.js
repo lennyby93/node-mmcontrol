@@ -895,12 +895,14 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
             //parse the current state data into a unifited format
             var currentState = {
                 'mode': self.getValue(unitid, 'mode', self._state[unitid].setmode),
-                'automode': self.getValue(unitid, 'mode', self._state[unitid].automode),
+                'automode': self.getValue(unitid, 'mode', self._state[unitid].setmode) === 'auto' ? self.getValue(unitid, 'mode', self._state[unitid].automode) : '',
                 'standby': self._state[unitid].standby === "1" ? "on" : "off",
                 'fanSpeed': self.getValue(unitid, 'fan', self._state[unitid].setfan),
                 'power': self.getValue(unitid, 'power', self._state[unitid].power),
                 'setTemperature': parseFloat(self._state[unitid].settemp),
-                'roomTemperature': parseFloat(self._state[unitid].roomtemp)
+                'roomTemperature': parseFloat(self._state[unitid].roomtemp),
+                'airDirV': self._capabilities[unitid].modelData.action.airDirV !== undefined ? self.getValue(unitid, 'airDirV', self._state[unitid].airdir) : '',
+                'airDirH': self._capabilities[unitid].modelData.action.airDirH !== undefined ? self.getValue(unitid, 'airDirH', self._state[unitid].airdirh) : ''
             };
             return callback(null, currentState);
         }

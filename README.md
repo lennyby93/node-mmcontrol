@@ -93,13 +93,15 @@ controller.getCurrentState(0, function (err, state) {
 output:
 ```JSON
     {
-     "mode": "auto",
-     "automode": "cool",
+     "mode": "cool",
+     "automode": "",
      "standby": "off",
-     "fanSpeed": "1",
+     "fanSpeed": "2",
      "power": "on",
-     "setTemperature": 22,
-     "roomTemperature": 23
+     "setTemperature": 23,
+     "roomTemperature": 24,
+     "airDirV": "",
+     "airDirH": ""
     }
 ```
 ### Set the mode of unit 0 to 'cool'
@@ -162,12 +164,14 @@ Returns an *object* with the current state of the heat pump unit
 | parameter | type | definition |
 |---|---|---|
 | mode | *string* | currently set mode ('cool', 'heat', 'dry', 'fan', 'auto') |
-| automode | *string* | if mode is set to 'auto' contains actual operating mode |
+| automode | *string* | if mode is set to 'auto' contains actual operating mode, empty string otherwise |
 | standby | *string* | if the unit is in standby mode ('on', 'off') |
 | fanSpeed | *string* | currently set fan speed |
 | power | *string* | current power mode ('on', 'off') |
 | setTemperature | *float* | currently set target temperature |
 | roomTemperature | *float* | currently reported room temperature |
+| airDirH | *string* | currently set horizontal air direction, empty string if the capability is not supported |
+| airDirV | *string* | currently set vertical air direction, empty string if the capability is not supported |
 
 If the power is 'off' the reported values are the last active ones from before the unit was switched off. Current roomTemperature is always reported (even when the unit is off), the reported temperature is always rounded to the nearest *integer* (this is a limitation of the API).
 
