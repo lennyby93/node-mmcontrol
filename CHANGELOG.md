@@ -1,3 +1,7 @@
+## 0.4.x
+ 
+ * Added abilty to track state of the unit
+
 ## 0.3.x
 
 * Added method that reports capabilities of the unit

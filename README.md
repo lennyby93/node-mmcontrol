@@ -114,6 +114,30 @@ controller.setMode(0, 'cool', function (err) {
 });
 
 ```
+
+## Events
+#### externalChange
+The event is only emitted if 'trackState' is set to true. The event is emitted if the state of the heatpump unit got changed by some external inputs (for example on-wall controller or the app).
+The event handler gets passed the change object that contains the information about previously stored values and the new ones, only modified properties are included. Only user-settable properties are tracked. 
+```javascript
+controller.on('externalChange', function (change) {
+    log.debug(JSON.stringify(change, null, 1));
+});
+```
+output:
+```javascript
+ {
+     "unitid": 0,
+     "prevState": {
+      "fanSpeed": "2",
+      "setTemperature": 25
+     },
+     "currState": {
+      "fanSpeed": "1",
+      "setTemperature": 24
+     }
+    }
+```
 ## API
 
 #### MMcontrol(params)
@@ -130,6 +154,7 @@ Constructor, sets initial values
 | minRefresh | *integer* | duration (in seconds) MMcontrol will wait before querying the API again to refresh the state of the heat pump ('set' requests are send immiedietaly) | optional | 60 |
 | tmpDir | *string* | directory used to store temporary files (cookies, capabilities and state if persistence is enabled) | optional | /tmp |
 | persistence | *bool* | if MMcontrol should store cookies, capabilities of the heat pump(s) and the state(s) in a file for re-use after process terminates | optional | true |
+| trackState | *bool* | if MMcontrol should track external changes made to the state of the unit and emit 'externalChange' events| optional | false |
 
 a *TypeError* exception is thrown if required parameters are missing.
 

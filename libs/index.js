@@ -6,11 +6,16 @@
 var restify = require('restify-clients');
 var fs = require('fs');
 var async = require('async');
+var EventEmitter = require('events').EventEmitter;
+var util = require('util');
+
 
 //static definitions
 var fileNames = {
         'state': 'state.txt'
     };
+
+var appVersion = '3.0.513';
 
 //commands used to control the heat pump
 //all capabilties are listed here, they get enabled if the capabitlies of the
@@ -166,18 +171,16 @@ var capabilitiesMapFilter = {
 
 //REST call points
 var APICommands = {
-        'login': {
-            url: 'api/login.aspx'
+        "login": {
+            "url": "api/login.aspx"
         },
-        'unitcapabilities': {
-            url:  'api/unitcapabilities.aspx'
+        "unitcapabilities": {
+            "url":  "api/unitcapabilities.aspx"
         },
-        'unitcommand': {
-            url:  'api/unitcommand.aspx'
+        "unitcommand": {
+            "url":  "api/unitcommand.aspx"
         }
     };
-
-var appVersion = '3.0.513';
 
 //only these capabilties are stored in the session file
 var knownCapabilities = [
@@ -195,7 +198,47 @@ var knownCapabilities = [
     'max'
 ];
 
+//map of the API properties to module properties
+var propertiesMap = {
+    "power": {
+        "prop": "power",
+        "trackable": true
+    },
+    "standby": {
+        "prop": "standby",
+        "trackable": false
+    },
+    "mode": {
+        "prop": "setmode",
+        "trackable": true
+    },
+    "automode": {
+        "prop": "automode",
+        "trackable": false
+    },
+    "fanSpeed": {
+        "prop": "setfan",
+        "trackable": true
+    },
+    "setTemperature": {
+        "prop": "settemp",
+        "trackable": true
+    },
+    "roomTemperature": {
+        "prop": "roomtemp",
+        "trackable": false
+    },
+    "airDirV": {
+        "prop": "airdir",
+        "trackable": true
+    },
+    "airDirH": {
+        "prop": "airDirH",
+        "trackable": true
+    }
+};
 
+//
 /**
  * @class This provides all the connectivity methods
  * @author lennyb
@@ -208,6 +251,7 @@ var knownCapabilities = [
      *                        minRefresh - the amount of time (in seconds) MMcontrol will wait before querying the API again to refreash the state of the heat pump(other requests are send immiedietaly)
      *                        tmpDir - directory used to store temporary files (cookies, capabilites and state if persistence is enabled)
      *                        persistence - if MMcontrol should store cookies, capabilities of the heat pump(s) and the state(s) in a file for re-use after process terminates
+     *                        trackState - if MMcontrol should check if the current state of the unit is the same as previously set one
  */
 function MMcontrol(params) {
 
@@ -242,6 +286,10 @@ function MMcontrol(params) {
         'persistence': {
             'required': false,
             'default': true
+        },
+        'trackState': {
+            'required': false,
+            'default': false
         }
     };
 
@@ -268,6 +316,11 @@ function MMcontrol(params) {
         }
     }
 
+    //previous state store
+    if (self._config.trackState === true) {
+        self._prevState = [];
+    }
+
     //logger
     if (self._config.log !== undefined) {
         try {
@@ -283,7 +336,12 @@ function MMcontrol(params) {
         userAgent: self._config.userAgent
     });
 
+    //EventEmitter
+    EventEmitter.call(self);
 }
+
+//inherit event handling
+util.inherits(MMcontrol, EventEmitter);
 
 /**
  * @function (private) logs a line to the bunyan log (if log is defined)
@@ -525,6 +583,88 @@ MMcontrol.prototype.parseCapabilities = function (unitid, callback) {
 };
 
 /**
+ * @function (private) reads the internally stored state a property of a unit (either currnet or previous) and returns the  normalised value
+ * @param   {number} unitid    sequencial number of the unit to query
+ * @param   {string} property  the property to return
+ * @param   {string} stateType the type of state to query ('_state' for current, '_prevState' for previous)
+ * @returns {string} the normalised value of the property
+ */
+MMcontrol.prototype.normaliseState = function (unitid, property, stateType) {
+
+    var self = this;
+
+//    self.log("normaliseState - " + property + " - " + stateType);
+
+    switch (property) {
+    case 'mode':
+        return self.getValue(unitid, 'mode', self[stateType][unitid].setmode);
+
+    case 'automode':
+        return self.getValue(unitid, 'mode', self[stateType][unitid].setmode) === 'auto' ? self.getValue(unitid, 'mode', self[stateType][unitid].automode) : '';
+
+    case 'standby':
+        return self[stateType][unitid].standby === "1" ? "on" : "off";
+
+    case 'fanSpeed':
+        return self.getValue(unitid, 'fan', self[stateType][unitid].setfan);
+
+    case 'power':
+        return self.getValue(unitid, 'power', self[stateType][unitid].power);
+
+    case 'setTemperature':
+        return parseFloat(self[stateType][unitid].settemp);
+
+    case 'roomTemperature':
+        return parseFloat(self[stateType][unitid].roomtemp);
+
+    case 'airDirV':
+        return self._capabilities[unitid].modelData.action.airDirV !== undefined ? self.getValue(unitid, 'airDirV', self[stateType][unitid].airdir) : '';
+
+    case 'airDirH':
+        return self._capabilities[unitid].modelData.action.airDirH !== undefined ? self.getValue(unitid, 'airDirH', self[stateType][unitid].airdirh) : '';
+    }
+
+};
+
+/**
+ * @function (private) compares previously set state with one received from the API
+ * if there is a difference a 'externalChange' event is emitted with an object that contains the differences:
+ * - prevState - object with previous values of parameters
+ * - currState - object with current values of parameters
+ * @param {number} unitid sequencial number of the unit to compare
+ */
+MMcontrol.prototype.compareStates = function (unitid) {
+
+    var self = this;
+
+    self.log("compareStates");
+
+    var diffState = {
+        'unitid': unitid,
+        'prevState': {},
+        'currState': {}
+    };
+    var diffFound = false;
+
+    if (self._prevState[unitid] !== undefined) {
+
+        var i;
+        for (i in propertiesMap) {
+            if (propertiesMap.hasOwnProperty(i) && propertiesMap[i].trackable === true) {
+                if (self._prevState[unitid][propertiesMap[i].prop] !== self._state[unitid][propertiesMap[i].prop]) {
+                    diffState.prevState[i] = self.normaliseState(unitid, i, '_prevState');
+                    diffState.currState[i] = self.normaliseState(unitid, i, '_state');
+                    diffFound = true;
+                }
+            }
+        }
+        if (diffFound) {
+            self.emit('externalChange', diffState);
+        }
+    }
+};
+
+/**
  * @function (private) calls the MEL API and returns results
  * @param   {string}   action   remote method to call
  * @param   {object}   params   parameters to pass in the POST
@@ -565,7 +705,6 @@ MMcontrol.prototype.callAPI = function (action, params, callback) {
                 if (err) {
                     return callback(err);
                 }
-//                self.log("got response:" + JSON.stringify(obj, null, 1));
                 return callback(null, obj);
             });
         });
@@ -576,7 +715,7 @@ MMcontrol.prototype.callAPI = function (action, params, callback) {
 };
 
 /**
- * @function (private) Calls login API, initialises the capabilities and state
+ * @function (private) Calls login API
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
  */
@@ -638,8 +777,14 @@ MMcontrol.prototype.callUnitState = function (unitid, callback) {
         if (err) {
             return callback(err);
         }
+        if (self._config.trackState === true) {
+            self._prevState[unitid] = self._state[unitid];
+        }
         self._state[unitid] = unitState;
         self._state[unitid].timestamp = (new Date()).getTime();
+        if (self._config.trackState === true) {
+            self.compareStates(unitid);
+        }
         return callback(null, unitState);
     });
 };
@@ -662,6 +807,9 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
         self._capabilities[i].unitid = i;
         self._state[i] = {};
         self._state[i].unitid = i;
+        if (self._config.trackState === true) {
+            self._prevState[i] = {};
+        }
     }
     async.series([
         //get capabilities of each unit
@@ -861,19 +1009,6 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
 
     async.series([
         function (callback) {
-            //check if the map of capabilities is loaded for the unit
-            if (self._capabilities[unitid].modelData === undefined) {
-                self.loadModel(unitid, function (err) {
-                    if (err) {
-                        return callback(err);
-                    }
-                    return callback();
-                });
-            } else {
-                return callback();
-            }
-        },
-        function (callback) {
             //check if we should refresh the data using API
             if (self._state[unitid].timestamp === undefined || ((new Date()).getTime() - self._state[unitid].timestamp) > self._config.minRefresh * 1000) {
                 self.callUnitState(unitid, function (err) {
@@ -893,17 +1028,13 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
         },
         function (callback) {
             //parse the current state data into a unifited format
-            var currentState = {
-                'mode': self.getValue(unitid, 'mode', self._state[unitid].setmode),
-                'automode': self.getValue(unitid, 'mode', self._state[unitid].setmode) === 'auto' ? self.getValue(unitid, 'mode', self._state[unitid].automode) : '',
-                'standby': self._state[unitid].standby === "1" ? "on" : "off",
-                'fanSpeed': self.getValue(unitid, 'fan', self._state[unitid].setfan),
-                'power': self.getValue(unitid, 'power', self._state[unitid].power),
-                'setTemperature': parseFloat(self._state[unitid].settemp),
-                'roomTemperature': parseFloat(self._state[unitid].roomtemp),
-                'airDirV': self._capabilities[unitid].modelData.action.airDirV !== undefined ? self.getValue(unitid, 'airDirV', self._state[unitid].airdir) : '',
-                'airDirH': self._capabilities[unitid].modelData.action.airDirH !== undefined ? self.getValue(unitid, 'airDirH', self._state[unitid].airdirh) : ''
-            };
+            var i;
+            var currentState = {};
+            for (i in propertiesMap) {
+                if (propertiesMap.hasOwnProperty(i)) {
+                    currentState[i] = self.normaliseState(unitid, i, '_state');
+                }
+            }
             return callback(null, currentState);
         }
     ],
@@ -959,15 +1090,41 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
 
     self.log("sendCommand (u:" + unitid + ") command: " + command);
 
-    self.callAPI('unitcommand', {unitid: self._capabilities[unitid].id, v: 2, commands: command}, function (err, unitState) {
-        if (err) {
-            return callback(err);
-        }
-        self._state[unitid] = unitState;
-        self._state[unitid].timestamp = (new Date()).getTime();
-        return callback();
-    });
-//    return callback();
+    async.series([
+        function (callback) {
+            if (self._config.trackState === true) {
+                self.callUnitState(unitid, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
+                return callback();
+            }
+        },
+        function (callback) {
+            self.callAPI('unitcommand', {unitid: self._capabilities[unitid].id, v: 2, commands: command}, function (err, unitState) {
+                if (err) {
+                    return callback(err);
+                }
+                if (self._config.trackState === true) {
+                    self._prevState[unitid] = self._state[unitid];
+                }
+                self._state[unitid] = unitState;
+                self._state[unitid].timestamp = (new Date()).getTime();
+                if (self._config.trackState === true) {
+                    self.compareStates(unitid);
+                }
+                return callback();
+            });
+        }],
+        function (err) {
+            if (err) {
+                return callback(err);
+            }
+            return callback();
+        });
 };
 
 /**
