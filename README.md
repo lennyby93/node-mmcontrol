@@ -204,6 +204,11 @@ If the power is 'off' the reported values are the last active ones from before t
 Returns an *object* with the current state of the heat pump unit as returned by the API (without being normalised with values from the model file)
 * unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
 * callback (*function* (error, state)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise, state contains the current state of the unit.
+#### setTemperatureOffset(unitid, offset, callback)
+Sets the offset that should be added to all temparture readings and settings (to be used when the temperature reported by the unit not correct). For example if the unit reports 26°C when the ambient temperature is 24°C the offset should be set to -2. 
+* unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
+* offset (*float*) - the offset to add to every temperature reading/setting
+* callback (*function* (error))  called on completion, if there was a problem 'error' contains a *string*, *null* otherwise
 
 #### setState (unitid, state, callback)
 Sets multiple properties of the unit at once. All properties are compared with the current state so only the necessary commands are sent. If temperature or mode are being changed the temperature will be adjusted to fit in the allowed range for the mode. 

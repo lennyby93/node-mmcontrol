@@ -229,12 +229,14 @@ var propertiesMap = {
     "setTemperature": {
         "prop": "settemp",
         "trackable": true,
-        "raw": true
+        "raw": true,
+        "useOffset": true
     },
     "roomTemperature": {
         "prop": "roomtemp",
         "trackable": false,
-        "raw": true
+        "raw": true,
+        "useOffset": true
     },
     "airDirV": {
         "prop": "airdir",
@@ -628,10 +630,10 @@ MMcontrol.prototype.normaliseState = function (unitid, property, stateType) {
         return self.getValue(unitid, 'power', self[stateType][unitid].power);
 
     case 'setTemperature':
-        return parseFloat(self[stateType][unitid].settemp);
+        return parseFloat(self[stateType][unitid].settemp) + self._capabilities[unitid].offset;
 
     case 'roomTemperature':
-        return parseFloat(self[stateType][unitid].roomtemp);
+        return parseFloat(self[stateType][unitid].roomtemp) + self._capabilities[unitid].offset;
 
     case 'airDirV':
         return self._capabilities[unitid].modelData.action.airdir !== undefined ? self.getValue(unitid, 'airdir', self[stateType][unitid].airdir) : '';
@@ -822,6 +824,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
     for (i = 0; i < userunits; i++) {
         self._capabilities[i] = {};
         self._capabilities[i].unitid = i;
+        self._capabilities[i].offset = 0;
         self._state[i] = {};
         self._state[i].unitid = i;
         if (self._config.trackState) {
@@ -1142,6 +1145,28 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
         });
 };
 
+
+/**
+ * @function sets the temperature offset of the unit
+ * @param   {number}   unitid   sequencial number of the unit to adjust
+ * @param   {number}   offset   the value to adjust each reading/setting by
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ */
+MMcontrol.prototype.setTemperatureOffset = function (unitid, offset, callback) {
+
+    var self = this;
+
+    self.log("setTemperatureOffset (unitid:" + unitid + ") to " + offset);
+
+    offset = parseFloat(offset);
+
+    if (offset !== undefined) {
+        self._capabilities[unitid].offset = offset;
+    }
+    return callback();
+};
+
 /**
  * @function sets multiple parameters of the unit at once
  * @param   {number}   unitid   sequencial number of the unit to send the command to
@@ -1159,7 +1184,7 @@ MMcontrol.prototype.setState = function (unitid, state, callback) {
 
     var self = this;
 
-    self.log("setState");
+    self.log("setState (unitid:" + unitid + ") to " + JSON.stringify(state, null, 0));
     var mode = state.mode !== undefined ? state.mode : self._state[unitid].state;
     var temperature = state.setTemperature !== undefined ? state.setTemperature : self._state[unitid].setTemperature;
 
@@ -1190,10 +1215,18 @@ MMcontrol.prototype.setState = function (unitid, state, callback) {
                         command += self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]];
                     }
                 } else {
-                    self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + state[i]);
-                    if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
-                        command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
-                        command += state[i];
+                    if (propertiesMap[i].useOffset !== undefined) {
+                        if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
+                            self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + ((parseFloat(state[i])) - self._capabilities[unitid].offset).toString());
+                            command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
+                            command += ((parseFloat(state[i])) - self._capabilities[unitid].offset).toString();
+                        } else {
+                            self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + state[i]);
+                            if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
+                                command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
+                                command += parseFloat(state[i]).toString();
+                            }
+                        }
                     }
                 }
             }
@@ -1257,8 +1290,9 @@ MMcontrol.prototype.setTemperature = function (unitid, temperature, callback) {
 
     self.log("setTemperature (unitid:" + unitid + ") to " + temperature);
 
-    temperature = parseFloat(temperature);
+    temperature = parseFloat(temperature) - self._capabilities[unitid].offset;
 
+    self.log("act: " + temperature);
     if (!isNaN(temperature)) {
         //check if current mode has temperature limits and change temperature to match
         if (self._capabilities[unitid].max[self._state[unitid].setmode] !== undefined) {
@@ -1269,6 +1303,7 @@ MMcontrol.prototype.setTemperature = function (unitid, temperature, callback) {
                 temperature = self._capabilities[unitid].max[self._state[unitid].setmode].max;
             }
 
+            self.log("settemp: " + self._state[unitid].settemp + " new:" + temperature);
             if (parseFloat(self._state[unitid].settemp) !== parseFloat(temperature)) {
                 self.sendCommand(unitid, self._capabilities[unitid].modelData.action.settemp + temperature, function (err) {
                     if (err) {
