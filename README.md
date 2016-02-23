@@ -205,11 +205,27 @@ Returns an *object* with the current state of the heat pump unit as returned by 
 * unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
 * callback (*function* (error, state)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise, state contains the current state of the unit.
 
+#### setState (unitid, state, callback)
+Sets multiple properties of the unit at once. All properties are compared with the current state so only the necessary commands are sent. If temperature or mode are being changed the temperature will be adjusted to fit in the allowed range for the mode. 
+* unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
+* state (*object*) - contains the properties and values to be set (not all have to be specified):
+
+| parameter | type | definition |
+|---|---|---|
+| mode | *string* |  mode ('cool', 'heat', 'dry', 'fan', 'auto') |
+| fanSpeed | *string* |  fan speed (1-5, 'auto')|
+| power | *string* | current power mode ('on', 'off') |
+| setTemperature | *float* | target temperature |
+| airDirH | *string* | horizontal air direction (0-5, 'auto', 'swing')|
+| airDirV | *string* | vertical air direction (0-5, 'auto', 'swing')|
+
+* callback (*function* (error))  called on completion, if there was a problem 'error' contains a *string*, *null* otherwise
+
 #### setPower (unitid, state, callback)
 Turns the unit off or on.
 * unitid (*integer*) - the id of the unit (as returned by *getUnitList*)
 * state (*string*) - 'on' or 'off' (as defined in the model file)
-* callback (*function* (error) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise
+* callback (*function* (error)) - called on completion, if there was a problem 'error' contains a *string*, *null* otherwise
 
 #### setTemperature (unitid, temperature, callback)
 Sets the target temperature. Only works in modes that support temperature ('cool', 'heat', 'auto'), in others quietly returns. The value of the temperature is adjusted to fit within the range allowed by the unit.
@@ -267,7 +283,7 @@ The following functions are only enabled if the unit reports back the capability
   
 ## Request optimisations
 
-MMcontrol tries to limit the number of requests used to query the current state of the heat pump ('get' commands, i.e. not changing the state of the unit). By default, the state is cached for 60 seconds (this value can be changed by passing the *minRefresh* parameter to the constructor). Each set-type command is send immediately and also refreshes the current state of the unit. 
+MMcontrol tries to limit the number of requests used to query the current state of the heat pump ('get' commands, i.e. not changing the state of the unit). By default, the state is cached for 60 seconds (this value can be changed by passing the *minRefresh* parameter to the constructor). Before a set-type command is send the new state is compared with the current one, if they differ the command is issued immediately and also refreshes the current state of the unit, otherwise the set-function quietly returns.
 
 ## Limitations
 

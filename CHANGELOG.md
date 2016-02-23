@@ -1,6 +1,7 @@
 ## 0.4.x
  
  * Added abilty to track state of the unit
+ * Added a single function to set state of the unit
 
 ## 0.3.x
 

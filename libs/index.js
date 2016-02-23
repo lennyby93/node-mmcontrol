@@ -16,20 +16,21 @@ var fileNames = {
     };
 
 var appVersion = '3.0.513';
+var stateVersion = 2;
 
 //commands used to control the heat pump
 //all capabilties are listed here, they get enabled if the capabitlies of the
 //unit allow for particular command
 var capabilitiesMap = {
     "action": {
-        "mode": "MD",
-        "fan": "FS",
+        "setmode": "MD",
+        "setfan": "FS",
         "power": "PW",
-        "temperature": "TS",
-        "airDirH": "AH", //hasairdirh
-        "airDirV": "AV"  //hasairdir
+        "settemp": "TS",
+        "airdirh": "AH", //hasairdirh
+        "airdir": "AV"  //hasairdir
     },
-    "mode": {
+    "setmode": {
         "heat": "1",
         "dry": "2",     //hasdrymode
         "cool": "3",
@@ -40,7 +41,7 @@ var capabilitiesMap = {
         "on": "1",
         "off": "0"
     },
-    "fan": {
+    "setfan": {
         "auto": "0",    //hasautofan
         "1": {          //fanstage: 1
             "1": "5"
@@ -68,7 +69,7 @@ var capabilitiesMap = {
             "5": "6"
         }
     },
-    "airDirH": {
+    "airdirh": {
         "1": {          //hasairdirh
             "auto": "0",
             "1": "1",
@@ -79,7 +80,7 @@ var capabilitiesMap = {
             "swing": "12"
         }
     },
-    "airDirV": {
+    "airdir": {
         "auto": "0",    //hasairauto
         "1": {          //hasairdir
             "1": "1",
@@ -95,16 +96,16 @@ var capabilitiesMap = {
 //filters used to check if functionality is present
 var capabilitiesMapFilter = {
     "action": {
-        "airDirH": {
+        "airdirh": {
             "capability" : "hasairdirh",
             "value": "1"
         },
-        "airDirV": {
+        "airdir": {
             "capability" : "hasairdir",
             "value": "1"
         }
     },
-    "mode": {
+    "setmode": {
         "dry": {
             "capability" : "hasdrymode",
             "value": "1"
@@ -114,7 +115,7 @@ var capabilitiesMapFilter = {
             "value": "1"
         }
     },
-    "fan": {
+    "setfan": {
         "auto": {
             "capability" : "hasautofan",
             "value": "1"
@@ -145,7 +146,7 @@ var capabilitiesMapFilter = {
             "copySubsection": true
         }
     },
-    "airDirV": {
+    "airdir": {
         "auto": {
             "capability" : "hasairauto",
             "value": "1"
@@ -160,7 +161,7 @@ var capabilitiesMapFilter = {
             "copySubsection": true
         }
     },
-    "airDirH": {
+    "airdirh": {
         "1": {
             "capability" : "hasairdirh",
             "value": "1",
@@ -202,39 +203,48 @@ var knownCapabilities = [
 var propertiesMap = {
     "power": {
         "prop": "power",
-        "trackable": true
+        "trackable": true,
+        "raw": false
     },
     "standby": {
         "prop": "standby",
-        "trackable": false
+        "trackable": false,
+        "raw": false
     },
     "mode": {
         "prop": "setmode",
-        "trackable": true
+        "trackable": true,
+        "raw": false
     },
     "automode": {
         "prop": "automode",
-        "trackable": false
+        "trackable": false,
+        "raw": false
     },
     "fanSpeed": {
         "prop": "setfan",
-        "trackable": true
+        "trackable": true,
+        "raw": false
     },
     "setTemperature": {
         "prop": "settemp",
-        "trackable": true
+        "trackable": true,
+        "raw": true
     },
     "roomTemperature": {
         "prop": "roomtemp",
-        "trackable": false
+        "trackable": false,
+        "raw": true
     },
     "airDirV": {
         "prop": "airdir",
-        "trackable": true
+        "trackable": true,
+        "raw": false
     },
     "airDirH": {
-        "prop": "airDirH",
-        "trackable": true
+        "prop": "airdirh",
+        "trackable": true,
+        "raw": false
     }
 };
 
@@ -317,7 +327,7 @@ function MMcontrol(params) {
     }
 
     //previous state store
-    if (self._config.trackState === true) {
+    if (self._config.trackState) {
         self._prevState = [];
     }
 
@@ -447,6 +457,7 @@ MMcontrol.prototype.storeState = function (callback) {
     if (self._config.persistence) {
 
         var state = {
+            'version': stateVersion,
             'session': self._session,
             'capabilities': self._capabilities,
             'state': self._state
@@ -521,6 +532,10 @@ MMcontrol.prototype.loadState = function (callback) {
             return callback(err);
         }
 
+        if (state.version === undefined || state.version !== stateVersion) {
+            return callback("state file ignored - wrong version");
+        }
+
         self._session = state.session;
         self._capabilities = state.capabilities;
         self._state = state.state;
@@ -579,6 +594,7 @@ MMcontrol.prototype.parseCapabilities = function (unitid, callback) {
             }
         }
     }
+    self.log(JSON.stringify(self._capabilities[unitid].modelData, null, 1));
     return callback();
 };
 
@@ -597,16 +613,16 @@ MMcontrol.prototype.normaliseState = function (unitid, property, stateType) {
 
     switch (property) {
     case 'mode':
-        return self.getValue(unitid, 'mode', self[stateType][unitid].setmode);
+        return self.getValue(unitid, 'setmode', self[stateType][unitid].setmode);
 
     case 'automode':
-        return self.getValue(unitid, 'mode', self[stateType][unitid].setmode) === 'auto' ? self.getValue(unitid, 'mode', self[stateType][unitid].automode) : '';
+        return self.getValue(unitid, 'setmode', self[stateType][unitid].setmode) === 'auto' ? self.getValue(unitid, 'setmode', self[stateType][unitid].automode) : '';
 
     case 'standby':
         return self[stateType][unitid].standby === "1" ? "on" : "off";
 
     case 'fanSpeed':
-        return self.getValue(unitid, 'fan', self[stateType][unitid].setfan);
+        return self.getValue(unitid, 'setfan', self[stateType][unitid].setfan);
 
     case 'power':
         return self.getValue(unitid, 'power', self[stateType][unitid].power);
@@ -618,10 +634,10 @@ MMcontrol.prototype.normaliseState = function (unitid, property, stateType) {
         return parseFloat(self[stateType][unitid].roomtemp);
 
     case 'airDirV':
-        return self._capabilities[unitid].modelData.action.airDirV !== undefined ? self.getValue(unitid, 'airDirV', self[stateType][unitid].airdir) : '';
+        return self._capabilities[unitid].modelData.action.airdir !== undefined ? self.getValue(unitid, 'airdir', self[stateType][unitid].airdir) : '';
 
     case 'airDirH':
-        return self._capabilities[unitid].modelData.action.airDirH !== undefined ? self.getValue(unitid, 'airDirH', self[stateType][unitid].airdirh) : '';
+        return self._capabilities[unitid].modelData.action.airdirh !== undefined ? self.getValue(unitid, 'airdirh', self[stateType][unitid].airdirh) : '';
     }
 
 };
@@ -646,12 +662,13 @@ MMcontrol.prototype.compareStates = function (unitid) {
     };
     var diffFound = false;
 
-    if (self._prevState[unitid] !== undefined) {
+    if (self._prevState[unitid] !== undefined && self._state[unitid] !== undefined) {
 
         var i;
         for (i in propertiesMap) {
             if (propertiesMap.hasOwnProperty(i) && propertiesMap[i].trackable === true) {
-                if (self._prevState[unitid][propertiesMap[i].prop] !== self._state[unitid][propertiesMap[i].prop]) {
+                if (self._prevState[unitid][propertiesMap[i].prop] !== undefined &&
+                        self._prevState[unitid][propertiesMap[i].prop] !== self._state[unitid][propertiesMap[i].prop]) {
                     diffState.prevState[i] = self.normaliseState(unitid, i, '_prevState');
                     diffState.currState[i] = self.normaliseState(unitid, i, '_state');
                     diffFound = true;
@@ -777,12 +794,12 @@ MMcontrol.prototype.callUnitState = function (unitid, callback) {
         if (err) {
             return callback(err);
         }
-        if (self._config.trackState === true) {
+        if (self._config.trackState) {
             self._prevState[unitid] = self._state[unitid];
         }
         self._state[unitid] = unitState;
         self._state[unitid].timestamp = (new Date()).getTime();
-        if (self._config.trackState === true) {
+        if (self._config.trackState) {
             self.compareStates(unitid);
         }
         return callback(null, unitState);
@@ -807,7 +824,7 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
         self._capabilities[i].unitid = i;
         self._state[i] = {};
         self._state[i].unitid = i;
-        if (self._config.trackState === true) {
+        if (self._config.trackState) {
             self._prevState[i] = {};
         }
     }
@@ -836,12 +853,12 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
                     return callback();
                 });
         },
-        //get current state of each unit
+        //get load the mapping file (model) of each unit
         function (callback) {
             async.each(self._capabilities,
                 function (id, callback) {
-                    self.log("getting state for: " + id.unitid);
-                    self.callUnitState(id.unitid, function (err) {
+                    self.log("getting model data for " + id.unitid);
+                    self.parseCapabilities(id.unitid, function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -855,12 +872,12 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
                     return callback();
                 });
         },
-        //get load the mapping file (model) of each unit
+        //get current state of each unit
         function (callback) {
             async.each(self._capabilities,
                 function (id, callback) {
-                    self.log("getting model data for " + id.unitid);
-                    self.parseCapabilities(id.unitid, function (err) {
+                    self.log("getting state for: " + id.unitid);
+                    self.callUnitState(id.unitid, function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -1005,7 +1022,7 @@ MMcontrol.prototype.getCurrentState = function (unitid, callback) {
 
     var self = this;
 
-    self.log("getCurrentState (u:" + unitid + ")");
+    self.log("getCurrentState (unitid:" + unitid + ")");
 
     async.series([
         function (callback) {
@@ -1057,7 +1074,7 @@ MMcontrol.prototype.getCurrentStateRaw = function (unitid, callback) {
 
     var self = this;
 
-    self.log("getCurrentStateRaw (u:" + unitid + ")");
+    self.log("getCurrentStateRaw (unitid:" + unitid + ")");
 
     if (self._state[unitid].timestamp === undefined || ((new Date()).getTime() - self._state[unitid].timestamp) > self._config.minRefresh * 1000) {
         self.callUnitState(unitid, function (err) {
@@ -1088,11 +1105,11 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
 
     var self = this;
 
-    self.log("sendCommand (u:" + unitid + ") command: " + command);
+    self.log("sendCommand (unitid:" + unitid + ") command: " + command);
 
     async.series([
         function (callback) {
-            if (self._config.trackState === true) {
+            if (self._config.trackState) {
                 self.callUnitState(unitid, function (err) {
                     if (err) {
                         return callback(err);
@@ -1108,14 +1125,12 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
                 if (err) {
                     return callback(err);
                 }
-                if (self._config.trackState === true) {
-                    self._prevState[unitid] = self._state[unitid];
+                if (self._config.trackState) {
+                    //delete previous state so 'externalChange' doesn't get emitted accidentally
+                    self._prevState[unitid] = undefined;
                 }
                 self._state[unitid] = unitState;
                 self._state[unitid].timestamp = (new Date()).getTime();
-                if (self._config.trackState === true) {
-                    self.compareStates(unitid);
-                }
                 return callback();
             });
         }],
@@ -1128,6 +1143,76 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
 };
 
 /**
+ * @function sets multiple parameters of the unit at once
+ * @param   {number}   unitid   sequencial number of the unit to send the command to
+ * @param   {object}   state    the definition of the state, the following properties are allowed (if supported by unit):
+ *                            - power
+ *                            - mode
+ *                            - fanSpeed
+ *                            - setTemperature
+ *                            - airDirH
+ *                            - airDirV
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ */
+MMcontrol.prototype.setState = function (unitid, state, callback) {
+
+    var self = this;
+
+    self.log("setState");
+    var mode = state.mode !== undefined ? state.mode : self._state[unitid].state;
+    var temperature = state.setTemperature !== undefined ? state.setTemperature : self._state[unitid].setTemperature;
+
+    //if changing mode and/or temperature make sure temperature is within the range
+    if (state.setTemperature !== undefined || state.mode !== undefined) {
+
+        if (self._capabilities[unitid].max[mode] !== undefined) {
+            if (temperature < self._capabilities[unitid].max[mode].min) {
+                state.setTemperature = self._capabilities[unitid].max[mode].min;
+            }
+            if (temperature > self._capabilities[unitid].max[mode].max) {
+                state.setTemperature = self._capabilities[unitid].max[mode].max;
+            }
+        }
+    }
+
+    //build the commands
+    var i;
+    var command = '';
+    for (i in propertiesMap) {
+        if (propertiesMap.hasOwnProperty(i) && propertiesMap[i].trackable === true) {
+            //make sure the new setting is different from the old one
+            if (state[i] !== undefined) {
+                if (!propertiesMap[i].raw) {
+                    self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]]);
+                    if (self._state[unitid][propertiesMap[i].prop].toString() !== self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]].toString()) {
+                        command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
+                        command += self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]];
+                    }
+                } else {
+                    self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + state[i]);
+                    if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
+                        command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
+                        command += state[i];
+                    }
+                }
+            }
+        }
+    }
+    if (command !== '') {
+        self.sendCommand(unitid, command, function (err) {
+            if (err) {
+                return callback(err);
+            }
+            return callback();
+        });
+    } else {
+        return callback();
+    }
+};
+
+
+/**
  * @function sets the power state of the unit
  * @param   {number}   unitid   sequencial number of the unit to send the command to
  * @param   {string}   state    the power state to set (on, off)
@@ -1138,15 +1223,19 @@ MMcontrol.prototype.setPower = function (unitid, state, callback) {
 
     var self = this;
 
-    self.log("setPower (u:" + unitid + ") to " + state);
+    self.log("setPower (unitid:" + unitid + ") to " + state);
     if (self._capabilities[unitid].modelData.action.power !== undefined) {
         if (self._capabilities[unitid].modelData.power[state] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.power + self._capabilities[unitid].modelData.power[state], function (err) {
-                if (err) {
-                    return callback(err);
-                }
+            if (self._state[unitid].power.toString() !== self._capabilities[unitid].modelData.power[state].toString()) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.power + self._capabilities[unitid].modelData.power[state], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
                 return callback();
-            });
+            }
         } else {
             return callback("uknown power state: " + state);
         }
@@ -1166,7 +1255,7 @@ MMcontrol.prototype.setTemperature = function (unitid, temperature, callback) {
 
     var self = this;
 
-    self.log("setTemperature (u:" + unitid + ") to " + temperature);
+    self.log("setTemperature (unitid:" + unitid + ") to " + temperature);
 
     temperature = parseFloat(temperature);
 
@@ -1180,12 +1269,16 @@ MMcontrol.prototype.setTemperature = function (unitid, temperature, callback) {
                 temperature = self._capabilities[unitid].max[self._state[unitid].setmode].max;
             }
 
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.temperature + temperature, function (err) {
-                if (err) {
-                    return callback(err);
-                }
+            if (parseFloat(self._state[unitid].settemp) !== parseFloat(temperature)) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.settemp + temperature, function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
                 return callback();
-            });
+            }
         } else {
             return callback();
         }
@@ -1205,27 +1298,27 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
 
     var self = this;
 
-    self.log("setMode (u:" + unitid + ") to " + mode);
+    self.log("setMode (unitid:" + unitid + ") to " + mode);
 
     //make sure the unit has the requested mode
-    if (self._capabilities[unitid].modelData.action.mode !== undefined) {
-        if (self._capabilities[unitid].modelData.mode[mode] !== undefined) {
+    if (self._capabilities[unitid].modelData.action.setmode !== undefined) {
+        if (self._capabilities[unitid].modelData.setmode[mode] !== undefined) {
             //check if the current temperature is within the range for the new mode and adjust accoridingly
             var temperature = self._state[unitid].settemp;
-            if (self._capabilities[unitid].max[self._capabilities[unitid].modelData.mode[mode]] !== undefined) {
-                if (temperature < self._capabilities[unitid].max[self._capabilities[unitid].modelData.mode[mode]].min) {
-                    temperature = self._capabilities[unitid].max[self._capabilities[unitid].modelData.mode[mode]].min;
+            if (self._capabilities[unitid].max[self._capabilities[unitid].modelData.setmode[mode]] !== undefined) {
+                if (temperature < self._capabilities[unitid].max[self._capabilities[unitid].modelData.setmode[mode]].min) {
+                    temperature = self._capabilities[unitid].max[self._capabilities[unitid].modelData.setmode[mode]].min;
                 }
-                if (temperature > self._capabilities[unitid].max[self._capabilities[unitid].modelData.mode[mode]].max) {
-                    temperature = self._capabilities[unitid].max[self._capabilities[unitid].modelData.mode[mode]].max;
+                if (temperature > self._capabilities[unitid].max[self._capabilities[unitid].modelData.setmode[mode]].max) {
+                    temperature = self._capabilities[unitid].max[self._capabilities[unitid].modelData.setmode[mode]].max;
                 }
             }
-            if (temperature.toString() !== self._state[unitid].settemp.toString()) {
+            if (parseFloat(temperature) !== parseFloat(self._state[unitid].settemp)) {
                 self.setTemperature(unitid, temperature, function (err) {
                     if (err) {
                         return callback(err);
                     }
-                    self.sendCommand(unitid, self._capabilities[unitid].modelData.action.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
+                    self.sendCommand(unitid, self._capabilities[unitid].modelData.action.setmode + self._capabilities[unitid].modelData.setmode[mode], function (err) {
                         if (err) {
                             return callback(err);
                         }
@@ -1233,12 +1326,16 @@ MMcontrol.prototype.setMode = function (unitid, mode, callback) {
                     });
                 });
             } else {
-                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.mode + self._capabilities[unitid].modelData.mode[mode], function (err) {
-                    if (err) {
-                        return callback(err);
-                    }
+                if (self._state[unitid].setmode.toString() !== self._capabilities[unitid].modelData.setmode[mode].toString()) {
+                    self.sendCommand(unitid, self._capabilities[unitid].modelData.action.setmode + self._capabilities[unitid].modelData.setmode[mode], function (err) {
+                        if (err) {
+                            return callback(err);
+                        }
+                        return callback();
+                    });
+                } else {
                     return callback();
-                });
+                }
             }
         } else {
             return callback("uknown mode: " + mode);
@@ -1259,18 +1356,22 @@ MMcontrol.prototype.setFanSpeed = function (unitid, fanSpeed, callback) {
 
     var self = this;
 
-    self.log("setFanSpeed (u:" + unitid + ") to " + fanSpeed);
+    self.log("setFanSpeed (unitid:" + unitid + ") to " + fanSpeed);
 
     fanSpeed = fanSpeed.toString();
 
-    if (self._capabilities[unitid].modelData.action.fan !== undefined) {
-        if (self._capabilities[unitid].modelData.fan[fanSpeed] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.fan + self._capabilities[unitid].modelData.fan[fanSpeed], function (err) {
-                if (err) {
-                    return callback(err);
-                }
+    if (self._capabilities[unitid].modelData.action.setfan !== undefined) {
+        if (self._capabilities[unitid].modelData.setfan[fanSpeed] !== undefined) {
+            if (self._state[unitid].setfan.toString() !== self._capabilities[unitid].modelData.setfan[fanSpeed].toString()) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.setfan + self._capabilities[unitid].modelData.setfan[fanSpeed], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
                 return callback();
-            });
+            }
         } else {
             return callback("unit doesn't support fan speed: " + fanSpeed);
         }
@@ -1290,18 +1391,22 @@ MMcontrol.prototype.setAirDirV = function (unitid, dir, callback) {
 
     var self = this;
 
-    self.log("setAirDirV (u:" + unitid + ") to " + dir);
+    self.log("setAirDirV (unitid:" + unitid + ") to " + dir);
 
     dir = dir.toString();
 
-    if (self._capabilities[unitid].modelData.action.airDirV !== undefined) {
-        if (self._capabilities[unitid].modelData.airDirV[dir] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airDirV + self._capabilities[unitid].modelData.airDirV[dir], function (err) {
-                if (err) {
-                    return callback(err);
-                }
+    if (self._capabilities[unitid].modelData.action.airdir !== undefined) {
+        if (self._capabilities[unitid].modelData.airdir[dir] !== undefined) {
+            if (self._state[unitid].airdir.toString() !== self._capabilities[unitid].modelData.airdir[dir].toString()) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airdir + self._capabilities[unitid].modelData.airdir[dir], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
                 return callback();
-            });
+            }
         } else {
             return callback("unit doesn't support vertical air direction: " + dir);
         }
@@ -1321,18 +1426,22 @@ MMcontrol.prototype.setAirDirH = function (unitid, dir, callback) {
 
     var self = this;
 
-    self.log("setAirDirH (u:" + unitid + ") to " + dir);
+    self.log("setAirDirH (unitid:" + unitid + ") to " + dir);
 
     dir = dir.toString();
 
-    if (self._capabilities[unitid].modelData.action.airDirH !== undefined) {
-        if (self._capabilities[unitid].modelData.airDirH[dir] !== undefined) {
-            self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airDirH + self._capabilities[unitid].modelData.airDirH[dir], function (err) {
-                if (err) {
-                    return callback(err);
-                }
+    if (self._capabilities[unitid].modelData.action.airdirh !== undefined) {
+        if (self._capabilities[unitid].modelData.airdirh[dir] !== undefined) {
+            if (self._state[unitid].airdirh.toString() !== self._capabilities[unitid].modelData.airdirh[dir].toString()) {
+                self.sendCommand(unitid, self._capabilities[unitid].modelData.action.airdirh + self._capabilities[unitid].modelData.airdirh[dir], function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback();
+                });
+            } else {
                 return callback();
-            });
+            }
         } else {
             return callback("unit doesn't support horizontal air direction: " + dir);
         }
