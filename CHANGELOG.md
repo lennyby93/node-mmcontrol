@@ -1,7 +1,7 @@
 ## 0.4.x
  
- * Added abilty to track state of the unit
- * Added a single method to set state of the unit
+ * Added ability to track the state of the unit
+ * Added a single method to set the state of the unit
  * Added setTemperatureOffset method
 
 ## 0.3.x
