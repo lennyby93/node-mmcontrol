@@ -659,8 +659,8 @@ MMcontrol.prototype.compareStates = function (unitid) {
 
     var diffState = {
         'unitid': unitid,
-        'prevState': {},
-        'currState': {}
+        'previousState': {},
+        'currentState': {}
     };
     var diffFound = false;
 
@@ -671,8 +671,8 @@ MMcontrol.prototype.compareStates = function (unitid) {
             if (propertiesMap.hasOwnProperty(i) && propertiesMap[i].trackable === true) {
                 if (self._prevState[unitid][propertiesMap[i].prop] !== undefined &&
                         self._prevState[unitid][propertiesMap[i].prop] !== self._state[unitid][propertiesMap[i].prop]) {
-                    diffState.prevState[i] = self.normaliseState(unitid, i, '_prevState');
-                    diffState.currState[i] = self.normaliseState(unitid, i, '_state');
+                    diffState.previousState[i] = self.normaliseState(unitid, i, '_prevState');
+                    diffState.currentState[i] = self.normaliseState(unitid, i, '_state');
                     diffFound = true;
                 }
             }
@@ -1129,7 +1129,7 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
                     return callback(err);
                 }
                 if (self._config.trackState) {
-                    //delete previous state so 'externalChange' doesn't get emitted accidentally
+                    //delete previous state so 'externalChange' doesn't get emitted accidentally if getState is ran before cache expires
                     self._prevState[unitid] = undefined;
                 }
                 self._state[unitid] = unitState;
@@ -1209,23 +1209,20 @@ MMcontrol.prototype.setState = function (unitid, state, callback) {
             //make sure the new setting is different from the old one
             if (state[i] !== undefined) {
                 if (!propertiesMap[i].raw) {
-                    self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]]);
                     if (self._state[unitid][propertiesMap[i].prop].toString() !== self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]].toString()) {
                         command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
                         command += self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]];
                     }
                 } else {
-                    if (propertiesMap[i].useOffset !== undefined) {
-                        if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
-                            self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + ((parseFloat(state[i])) - self._capabilities[unitid].offset).toString());
+                    if (propertiesMap[i].useOffset === true) {
+                        if (self._state[unitid][propertiesMap[i].prop].toString() !== ((parseFloat(state[i])) - self._capabilities[unitid].offset).toString()) {
                             command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
                             command += ((parseFloat(state[i])) - self._capabilities[unitid].offset).toString();
-                        } else {
-                            self.log("setting for " + i + " cur:" + self._state[unitid][propertiesMap[i].prop] + " new:" + state[i]);
-                            if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
-                                command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
-                                command += parseFloat(state[i]).toString();
-                            }
+                        }
+                    } else {
+                        if (self._state[unitid][propertiesMap[i].prop].toString() !== state[i].toString()) {
+                            command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
+                            command += parseFloat(state[i]).toString();
                         }
                     }
                 }

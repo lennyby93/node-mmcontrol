@@ -9,6 +9,7 @@ MMcontrol provides the following features:
 * setting the target temperature
 * setting the airflow direction (horizontal and vertical)
 * reading current state of the unit (power mode, standby mode, operation mode, fan speed, room temperature and target temperature)
+* notifying about changes to the state of the system made through the on-wall controller or the app
 * supports multiple units under a single account
 * session persistence between subsequent calls
 * integrates with bunyan logger
@@ -128,11 +129,11 @@ output:
 ```javascript
  {
      "unitid": 0,
-     "prevState": {
+     "previousState": {
       "fanSpeed": "2",
       "setTemperature": 25
      },
-     "currState": {
+     "currentState": {
       "fanSpeed": "1",
       "setTemperature": 24
      }
