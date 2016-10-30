@@ -447,7 +447,7 @@ MMcontrol.prototype.getValue = function (unitid, section, value) {
 
 /**
  * @function (private) stores current state (cookies, heat pumps capabilties and states) into a file, if persistence is set
- * @param   {function} callback called with results 
+ * @param   {function} callback called with results
  * @returns {object}   - error (if error was encountered)
  */
 MMcontrol.prototype.storeState = function (callback) {
@@ -621,7 +621,7 @@ MMcontrol.prototype.normaliseState = function (unitid, property, stateType) {
         return self.getValue(unitid, 'setmode', self[stateType][unitid].setmode) === 'auto' ? self.getValue(unitid, 'setmode', self[stateType][unitid].automode) : '';
 
     case 'standby':
-        return self[stateType][unitid].standby === "1" ? "on" : "off";
+        return self[stateType][unitid].standby.toString() === "1" ? "on" : "off";
 
     case 'fanSpeed':
         return self.getValue(unitid, 'setfan', self[stateType][unitid].setfan);
@@ -1013,7 +1013,7 @@ MMcontrol.prototype.getCapabilities = function (unitid, callback) {
  * @param   {number}   unitid   sequencial number of the unit to query
  * @param   {function} callback called with results
  * @returns {object}   - error (if one was encountered)
- *                              - state object: 
+ *                              - state object:
  *                              - mode - ('auto', 'cool', 'heat', 'dry', 'fan' or 'unknown')
  *                              - automode - ('cool' or 'heat') - only of interest if mode returns 'auto'
  *                              - fan - current fan speed (string)
@@ -1209,7 +1209,9 @@ MMcontrol.prototype.setState = function (unitid, state, callback) {
             //make sure the new setting is different from the old one
             if (state[i] !== undefined) {
                 if (!propertiesMap[i].raw) {
-                    if (self._state[unitid][propertiesMap[i].prop].toString() !== self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]].toString()) {
+                    if (self._capabilities[unitid].modelData[propertiesMap[i].prop] !== undefined &&
+                            self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]] &&
+                            self._state[unitid][propertiesMap[i].prop].toString() !== self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]].toString()) {
                         command += ',' + self._capabilities[unitid].modelData.action[propertiesMap[i].prop];
                         command += self._capabilities[unitid].modelData[propertiesMap[i].prop][state[i]];
                     }
