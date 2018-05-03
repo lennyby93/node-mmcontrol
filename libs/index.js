@@ -9,6 +9,7 @@ var async = require('async');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
 
+var http = require('http');
 
 //static definitions
 var fileNames = {
@@ -180,6 +181,9 @@ var APICommands = {
         },
         "unitcommand": {
             "url":  "api/unitcommand.aspx"
+        },
+        "logout": {
+            "url": "api/logout.aspx"
         }
     };
 
@@ -196,7 +200,8 @@ var knownCapabilities = [
     'hasdrymode',
     'hasairauto',
     'hasairdirh',
-    'max'
+    'max',
+    'localip'
 ];
 
 //map of the API properties to module properties
@@ -302,6 +307,10 @@ function MMcontrol(params) {
         'trackState': {
             'required': false,
             'default': false
+        },
+        'sendLocalCommand': {
+            'required': false,
+            'default': true
         }
     };
 
@@ -733,6 +742,37 @@ MMcontrol.prototype.callAPI = function (action, params, callback) {
 
 };
 
+
+/**
+ * @function (private) send command to the unit locally
+ * @param   {string}   ip       remote method to call
+ * @param   {string}   command   command to pass in the POST
+ */
+MMcontrol.prototype.sendLocalCommand = function (ip, command) {
+
+    var self = this;
+
+    self.log("sending local command to " + ip);
+
+    http.request({
+      host: ip,
+      port: 80,
+      path: "/smart",
+      method: 'POST'
+    }, function(res) {
+      var str = "";
+
+      if(res.statusCode) {
+        res.on('data', function (chunk) {
+          str +=  chunk;
+        });
+        res.on('end', function (chunk) {
+          console.log(str);
+        });
+      }
+    }).end('<?xml version="1.0" encoding="UTF-8"?><CSV><CONNECT>ON</CONNECT><CODE><VALUE>' + command + '</VALUE></CODE></CSV>');
+};
+
 /**
  * @function (private) Calls login API
  * @param   {function} callback called with results
@@ -757,6 +797,25 @@ MMcontrol.prototype.login = function (callback) {
     });
 };
 
+/**
+ * @function (private) Calls logout API
+ * @param   {function} callback called with results
+ * @returns {object}   - error (if one was encountered)
+ */
+MMcontrol.prototype.logout = function (callback) {
+
+    var self = this;
+
+    self.log("logout");
+
+    self.callAPI('logout', {appversion: appVersion}, function (err, response) {
+        if (err) {
+            return callback(err);
+        }
+
+        return callback();
+    });
+};
 
 /**
  * @function (private) gets Capabilties of a unit using the API
@@ -774,6 +833,11 @@ MMcontrol.prototype.callUnitCapabilities = function (unitid, callback) {
     self.callAPI('unitcapabilities', {unitid: unitid}, function (err, unitCapabilities) {
         if (err) {
             return callback(err);
+        }
+        for (i = 0; i < knownCapabilities.length; i++) {
+            if (unitCapabilties[knownCapabilities[i]] !== undefined) {
+                self._capabilities[id.unitid][knownCapabilities[i]] = unitCapabilties[knownCapabilities[i]];
+            }
         }
         return callback(null, unitCapabilities);
     });
@@ -840,11 +904,6 @@ MMcontrol.prototype.initialise = function (userunits, callback) {
                     self.callUnitCapabilities(id.unitid, function (err, unitCapabilties) {
                         if (err) {
                             return callback(err);
-                        }
-                        for (i = 0; i < knownCapabilities.length; i++) {
-                            if (unitCapabilties[knownCapabilities[i]] !== undefined) {
-                                self._capabilities[id.unitid][knownCapabilities[i]] = unitCapabilties[knownCapabilities[i]];
-                            }
                         }
                         return callback();
                     });
@@ -1124,7 +1183,7 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
             }
         },
         function (callback) {
-            self.callAPI('unitcommand', {unitid: self._capabilities[unitid].id, v: 2, commands: command}, function (err, unitState) {
+            self.callAPI('unitcommand', {unitid: self._capabilities[unitid].id, v: 2, lc: 1, commands: command}, function (err, unitState) {
                 if (err) {
                     return callback(err);
                 }
@@ -1134,6 +1193,19 @@ MMcontrol.prototype.sendCommand = function (unitid, command, callback) {
                 }
                 self._state[unitid] = unitState;
                 self._state[unitid].timestamp = (new Date()).getTime();
+
+                if (self._config.sendLocalCommand && unitState.lc) {
+                  var localip = self._capabilities[unitid].localip;
+
+                  if (localip) {
+                    self.sendLocalCommand(localip, unitState.lc)
+                  } else {
+                    self.callUnitCapabilities(unitid, function(err, unitCapabilities){
+                      self.sendLocalCommand(unitCapabilities.localip, unitState.lc)
+                    });
+                  }
+                }
+
                 return callback();
             });
         }],
